@@ -2,51 +2,92 @@
 <html lang="mk">
 <head>
   <meta charset="utf-8" />
-  <title>WebAR Image Detection</title>
+  <title>WebAR со копче</title>
 
   <!-- Вклучуваме A-Frame и MindAR Image компонента -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
 
-  <!-- Малку базичен CSS за целата страница -->
   <style>
     body, html {
       margin: 0;
       padding: 0;
       overflow: hidden;
+      font-family: sans-serif;
     }
-    a-scene {
+    /* Центрирање на копчето */
+    #startBtn {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 1em 2em;
+      font-size: 1.2em;
+      background-color: #0288d1;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    #startBtn:hover {
+      background-color: #0277bd;
+    }
+    /* AR контейнерот е скриен додека не го притиснеме копчето */
+    #arContainer {
+      display: none;
       width: 100vw;
       height: 100vh;
+    }
+    /* А-Frame сцена која ќе зазема цел екран */
+    #arContainer a-scene {
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
 
 <body>
-<!-- MindAR сцена за image tracking -->
-<a-scene
-        mindar-image="imageTargetSrc: Pokemon.mind; maxTrack: 1;"
-        vr-mode-ui="enabled: false"
-        device-orientation-permission-ui="enabled: false"
->
-  <!-- Претходно ги вчитуваме asset-ите (3D моделот) -->
-  <a-assets>
-    <!-- Ова е нашиот GLB модел (House.glb) со ID "houseModel" -->
-    <a-asset-item id="houseModel" src="House.glb"></a-asset-item>
-  </a-assets>
+<!-- Копчето кое го стартува AR -->
+<button id="startBtn">Start AR</button>
 
-  <!-- Камерата (обезбедена од MindAR) -->
-  <a-entity mindar-image-camera></a-entity>
+<!-- AR сцена (MindAR) – по дифолт е скриена -->
+<div id="arContainer">
+  <a-scene
+          embedded
+          mindar-image="imageTargetSrc: Pokemon.mind; maxTrack: 1;"
+          vr-mode-ui="enabled: false"
+          device-orientation-permission-ui="enabled: true"
+  >
+    <a-assets>
+      <a-asset-item id="houseModel" src="House.glb"></a-asset-item>
+    </a-assets>
 
-  <!-- Кога се детектира target-слката (Pokemon), тука го прикажуваме моделот -->
-  <a-entity mindar-image-target="targetIndex: 0">
-    <!-- Прикажуваме го GLB моделот со одредена скала и позиција -->
-    <a-gltf-model
-            src="#houseModel"
-            scale="0.5 0.5 0.5"
-            position="0 0 0"
-    ></a-gltf-model>
-  </a-entity>
-</a-scene>
+    <a-entity mindar-image-camera></a-entity>
+
+    <a-entity mindar-image-target="targetIndex: 0">
+      <a-gltf-model
+              src="#houseModel"
+              scale="0.5 0.5 0.5"
+              position="0 0 0"
+      ></a-gltf-model>
+    </a-entity>
+  </a-scene>
+</div>
+
+<script>
+  // Наѓаме ги копчето и AR-контейнерот во DOM
+  const startBtn = document.getElementById("startBtn");
+  const arContainer = document.getElementById("arContainer");
+
+  // Кога ќе го притиснеме копчето:
+  startBtn.addEventListener("click", () => {
+    // Сокриваме го копчето
+    startBtn.style.display = "none";
+    // Прикажуваме го AR-контейнерот
+    arContainer.style.display = "block";
+    // По потреба, може да викнеме читање на камерата веднаш
+    // (но MindAR автоматски ќе го направи тоа при прв пристап до <a-entity mindar-image-camera>).
+  });
+</script>
 </body>
 </html>
