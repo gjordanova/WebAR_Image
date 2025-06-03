@@ -1,93 +1,129 @@
 <!DOCTYPE html>
 <html lang="mk">
 <head>
-  <meta charset="utf-8" />
-  <title>WebAR со копче</title>
-
-  <!-- Вклучуваме A-Frame и MindAR Image компонента -->
-  <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
-
+  <meta charset="utf-8">
+  <title>WebXR Image Tracking Пример</title>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      font-family: sans-serif;
-    }
-    /* Центрирање на копчето */
-    #startBtn {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      padding: 1em 2em;
-      font-size: 1.2em;
-      background-color: #0288d1;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    #startBtn:hover {
-      background-color: #0277bd;
-    }
-    /* AR контейнерот е скриен додека не го притиснеме копчето */
-    #arContainer {
-      display: none;
-      width: 100vw;
-      height: 100vh;
-    }
-    /* А-Frame сцена која ќе зазема цел екран */
-    #arContainer a-scene {
-      width: 100%;
-      height: 100%;
-    }
+    body, html { margin: 0; padding: 0; overflow: hidden; }
+    canvas { width: 100%; height: 100%; display: block; }
+    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
   </style>
 </head>
-
 <body>
-<!-- Копчето кое го стартува AR -->
-<button id="startBtn">Start AR</button>
-
-<!-- AR сцена (MindAR) – по дифолт е скриена -->
-<div id="arContainer">
-  <a-scene
-          embedded
-          mindar-image="imageTargetSrc: Pokemon.mind; maxTrack: 1;"
-          vr-mode-ui="enabled: false"
-          device-orientation-permission-ui="enabled: true"
-  >
-    <a-assets>
-      <a-asset-item id="houseModel" src="House.glb"></a-asset-item>
-    </a-assets>
-
-    <a-entity mindar-image-camera></a-entity>
-
-    <a-entity mindar-image-target="targetIndex: 0">
-      <a-gltf-model
-              src="#houseModel"
-              scale="0.5 0.5 0.5"
-              position="0 0 0"
-      ></a-gltf-model>
-    </a-entity>
-  </a-scene>
-</div>
+<div id="loading">Проверка на компатибилност...</div>
+<canvas id="xrCanvas"></canvas>
 
 <script>
-  // Наѓаме ги копчето и AR-контейнерот во DOM
-  const startBtn = document.getElementById("startBtn");
-  const arContainer = document.getElementById("arContainer");
+  const canvas = document.getElementById('xrCanvas');
+  const loadingDiv = document.getElementById('loading');
+  let gl, xrSession, xrRefSpace, trackedImageIndex = 0;
+  let xrViewerPose, xrFrameOfRef;
 
-  // Кога ќе го притиснеме копчето:
-  startBtn.addEventListener("click", () => {
-    // Сокриваме го копчето
-    startBtn.style.display = "none";
-    // Прикажуваме го AR-контейнерот
-    arContainer.style.display = "block";
-    // По потреба, може да викнеме читање на камерата веднаш
-    // (но MindAR автоматски ќе го направи тоа при прв пристап до <a-entity mindar-image-camera>).
-  });
+  // Ова е URI-то до PNG/JPEG сликата што го користиме како target:
+  const imageBitmapPromise = fetch('Pokemon.jpg')
+          .then(res => res.blob())
+          .then(blob => createImageBitmap(blob));
+
+  // Проверуваме дали прелистувачот поддржува WebXR и конкретно image-tracking:
+  async function checkXRSupport() {
+    if (!navigator.xr) {
+      loadingDiv.textContent = 'WebXR не е поддржан во овој прелистувач.';
+      return;
+    }
+    // Бараме WebXR session со image-tracking како required feature:
+    const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
+    if (!isSupported) {
+      loadingDiv.textContent = 'immersive-ar Session не е достапен.';
+      return;
+    }
+    // Го бараме и image-tracking какo екстензија:
+    const imgTrackingSupported = await navigator.xr.isSessionSupported('immersive-ar', {
+      requiredFeatures: ['image-tracking']
+    });
+    if (!imgTrackingSupported) {
+      loadingDiv.textContent = 'image-tracking не е поддржан на оваа платформа.';
+      return;
+    }
+    // Ако сме овде, сите потребни сесии и екстензии се достапни:
+    loadingDiv.textContent = 'Подготвено за AR. Почекајте го стартувањето...';
+    startXRSession();
+  }
+
+  async function startXRSession() {
+    // Креираме WebGL контекст
+    gl = canvas.getContext('webgl', { xrCompatible: true });
+
+    // Чекаме да го вчита битмапот од сликата
+    const bitmap = await imageBitmapPromise;
+
+    // Започнуваме immersive-ar session со image-tracking feature
+    xrSession = await navigator.xr.requestSession('immersive-ar', {
+      requiredFeatures: ['image-tracking', 'local']
+    });
+
+    // Поврзуваме WebGL context-от со XR session-от
+    await xrSession.updateRenderState({
+      baseLayer: new XRWebGLLayer(xrSession, gl)
+    });
+
+    // Креираме reference space (локален центриран простор)
+    xrRefSpace = await xrSession.requestReferenceSpace('local');
+
+    // Дефинираме листа со слики што сакаме да ги следиме
+    // Во WebXR Image Tracking, секоја слика мора да биде ImageBitmap + физички dimenzion
+    const trackedImages = [{
+      image: bitmap,
+      widthInMeters: 0.2  // физичка големина на сликата (20 cm како пример)
+    }];
+
+    // Задаваме ги сликите на XR session-от
+    const imageTrackingInit = { trackedImages };
+    await xrSession.updateTargetImages(imageTrackingInit);
+
+    // Се претплаќаме на рестарт на секој фрејм
+    xrSession.requestAnimationFrame(onXRFrame);
+
+    // Скриваме порака за „loading“
+    loadingDiv.style.display = 'none';
+  }
+
+  function onXRFrame(time, frame) {
+    const session = frame.session;
+    session.requestAnimationFrame(onXRFrame);
+
+    const pose = frame.getViewerPose(xrRefSpace);
+    if (!pose) return;
+
+    // Преземаме WebGL слој за рендерирање
+    gl.bindFramebuffer(gl.FRAMEBUFFER, session.renderState.baseLayer.framebuffer);
+    gl.clearColor(0.0, 0.0, 0.0, 0.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    // За секоја детектирана (track-ирана) слика, добиваме поза
+    const results = frame.getImageTrackingResults();
+    for (const result of results) {
+      const imageIndex = result.index;              // Индексот на сликата (само 0 ако имаме една цел)
+      const state = result.trackingState;           // „tracked“, „emulated“, „not-tracked“
+      if (state === 'tracked') {
+        const pose = frame.getPose(result.imageSpace, xrRefSpace);
+        if (pose) {
+          // Овде можеме да го рендерираме 3D моделот во поза `pose.transform`:
+          //   pose.transform.position  (x, y, z)
+          //   pose.transform.orientation (кватернион)
+          // За краткост, тука не правиме вистинско Three.js рендерирање,
+          // туку само ја покажуваме состојбата во конзола:
+          console.log('Слика детектирана: index =', imageIndex,
+                  ', поза =', pose.transform);
+          // Овa е моментот да го додадеш твојот Three.js/GLTF рендерер,
+          // каде што ќе креираш сцена, камера и светло, и ќе го позиционираш
+          // моделот (на пр. House.glb или Farmhouse.glb) на основа на оваа поза.
+        }
+      }
+    }
+  }
+
+  // Почнуваме ги проверките
+  checkXRSupport();
 </script>
 </body>
 </html>
