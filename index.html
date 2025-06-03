@@ -1,35 +1,48 @@
 <!DOCTYPE html>
-<html>
+<html lang="mk">
 <head>
   <meta charset="utf-8" />
+  <title>WebAR Image Detection</title>
+
+  <!-- Вклучуваме A-Frame и MindAR Image компонента -->
   <script src="https://cdn.jsdelivr.net/npm/aframe@1.4.0/dist/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-aframe.prod.js"></script>
+
+  <!-- Малку базичен CSS за целата страница -->
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    a-scene {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
 </head>
+
 <body>
 <!-- MindAR сцена за image tracking -->
 <a-scene
-        mindar-image="imageTargetSrc: qr_mind.mind; maxTrack: 1;"
+        mindar-image="imageTargetSrc: Pokemon.mind; maxTrack: 1;"
         vr-mode-ui="enabled: false"
-        gesture-detector
         device-orientation-permission-ui="enabled: false"
 >
-  <!-- Асемблирање на assets: тука се вчитува 3D моделот -->
+  <!-- Претходно ги вчитуваме asset-ите (3D моделот) -->
   <a-assets>
-    <a-asset-item id="myModel" src="model.glb"></a-asset-item>
+    <!-- Ова е нашиот GLB модел (House.glb) со ID "houseModel" -->
+    <a-asset-item id="houseModel" src="House.glb"></a-asset-item>
   </a-assets>
 
-  <!-- Камера/AR компонентата -->
+  <!-- Камерата (обезбедена од MindAR) -->
   <a-entity mindar-image-camera></a-entity>
 
-  <!-- Кога MindAR ќе ја детектира сликата (QR-кодот), ќе се прикаже 3D моделот -->
-  <a-entity
-          mindar-image-target="targetIndex: 0"
-          geometry="primitive: plane; width: 1; height: 1;"
-          position="0 0 0"
-  >
-    <!-- Вашиот 3D модел (скалиран и позициониран според потреба) -->
+  <!-- Кога се детектира target-слката (Pokemon), тука го прикажуваме моделот -->
+  <a-entity mindar-image-target="targetIndex: 0">
+    <!-- Прикажуваме го GLB моделот со одредена скала и позиција -->
     <a-gltf-model
-            src="#myModel"
+            src="#houseModel"
             scale="0.5 0.5 0.5"
             position="0 0 0"
     ></a-gltf-model>
