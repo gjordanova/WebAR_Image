@@ -42,10 +42,10 @@
 
   // ✅ Dynamically load correct model for platform
   if (isIOS) {
-    viewer.setAttribute("ios-src", "House.usdz");
-    viewer.setAttribute("src", "House.glb"); // fallback
+    viewer.setAttribute("ios-src", "House1.usdz");
+    viewer.setAttribute("src", "House1.glb"); // fallback
   } else if (isAndroid) {
-    viewer.setAttribute("src", "House.glb");
+    viewer.setAttribute("src", "House1.glb");
   }
 
   // ✅ Ensure AR is triggered on click
