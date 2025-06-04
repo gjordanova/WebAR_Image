@@ -1,129 +1,61 @@
 <!DOCTYPE html>
-<html lang="mk">
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>WebXR Image Tracking Пример</title>
+  <meta charset="UTF-8">
+  <title>30x30 Tile in AR</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    body, html { margin: 0; padding: 0; overflow: hidden; }
-    canvas { width: 100%; height: 100%; display: block; }
-    #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    body { text-align: center; font-family: sans-serif; margin-top: 50px; }
+    button {
+      font-size: 18px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 8px;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
-<div id="loading">Проверка на компатибилност...</div>
-<canvas id="xrCanvas"></canvas>
+<h1>View 30x30 Tile in AR</h1>
+
+<model-viewer id="viewer"
+              alt="Gray Marble Tile"
+              ar
+              ar-modes="webxr scene-viewer fallback"
+              ar-placement="floor"
+              camera-controls
+              auto-rotate
+              environment-image="neutral"
+              exposure="1.0">
+</model-viewer>
+
+<button id="ar-button">📱 View in AR</button>
 
 <script>
-  const canvas = document.getElementById('xrCanvas');
-  const loadingDiv = document.getElementById('loading');
-  let gl, xrSession, xrRefSpace, trackedImageIndex = 0;
-  let xrViewerPose, xrFrameOfRef;
+  const viewer = document.getElementById('viewer');
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
 
-  // Ова е URI-то до PNG/JPEG сликата што го користиме како target:
-  const imageBitmapPromise = fetch('Pokemon.jpg')
-          .then(res => res.blob())
-          .then(blob => createImageBitmap(blob));
+  const isAndroid = /android/i.test(userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream;
 
-  // Проверуваме дали прелистувачот поддржува WebXR и конкретно image-tracking:
-  async function checkXRSupport() {
-    if (!navigator.xr) {
-      loadingDiv.textContent = 'WebXR не е поддржан во овој прелистувач.';
-      return;
-    }
-    // Бараме WebXR session со image-tracking како required feature:
-    const isSupported = await navigator.xr.isSessionSupported('immersive-ar');
-    if (!isSupported) {
-      loadingDiv.textContent = 'immersive-ar Session не е достапен.';
-      return;
-    }
-    // Го бараме и image-tracking какo екстензија:
-    const imgTrackingSupported = await navigator.xr.isSessionSupported('immersive-ar', {
-      requiredFeatures: ['image-tracking']
-    });
-    if (!imgTrackingSupported) {
-      loadingDiv.textContent = 'image-tracking не е поддржан на оваа платформа.';
-      return;
-    }
-    // Ако сме овде, сите потребни сесии и екстензии се достапни:
-    loadingDiv.textContent = 'Подготвено за AR. Почекајте го стартувањето...';
-    startXRSession();
+  // ✅ Dynamically load correct model for platform
+  if (isIOS) {
+    viewer.setAttribute("ios-src", "house.usdz");
+    viewer.setAttribute("src", "house.glb"); // fallback
+  } else if (isAndroid) {
+    viewer.setAttribute("src", "house.glb");
   }
 
-  async function startXRSession() {
-    // Креираме WebGL контекст
-    gl = canvas.getContext('webgl', { xrCompatible: true });
-
-    // Чекаме да го вчита битмапот од сликата
-    const bitmap = await imageBitmapPromise;
-
-    // Започнуваме immersive-ar session со image-tracking feature
-    xrSession = await navigator.xr.requestSession('immersive-ar', {
-      requiredFeatures: ['image-tracking', 'local']
-    });
-
-    // Поврзуваме WebGL context-от со XR session-от
-    await xrSession.updateRenderState({
-      baseLayer: new XRWebGLLayer(xrSession, gl)
-    });
-
-    // Креираме reference space (локален центриран простор)
-    xrRefSpace = await xrSession.requestReferenceSpace('local');
-
-    // Дефинираме листа со слики што сакаме да ги следиме
-    // Во WebXR Image Tracking, секоја слика мора да биде ImageBitmap + физички dimenzion
-    const trackedImages = [{
-      image: bitmap,
-      widthInMeters: 0.2  // физичка големина на сликата (20 cm како пример)
-    }];
-
-    // Задаваме ги сликите на XR session-от
-    const imageTrackingInit = { trackedImages };
-    await xrSession.updateTargetImages(imageTrackingInit);
-
-    // Се претплаќаме на рестарт на секој фрејм
-    xrSession.requestAnimationFrame(onXRFrame);
-
-    // Скриваме порака за „loading“
-    loadingDiv.style.display = 'none';
-  }
-
-  function onXRFrame(time, frame) {
-    const session = frame.session;
-    session.requestAnimationFrame(onXRFrame);
-
-    const pose = frame.getViewerPose(xrRefSpace);
-    if (!pose) return;
-
-    // Преземаме WebGL слој за рендерирање
-    gl.bindFramebuffer(gl.FRAMEBUFFER, session.renderState.baseLayer.framebuffer);
-    gl.clearColor(0.0, 0.0, 0.0, 0.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    // За секоја детектирана (track-ирана) слика, добиваме поза
-    const results = frame.getImageTrackingResults();
-    for (const result of results) {
-      const imageIndex = result.index;              // Индексот на сликата (само 0 ако имаме една цел)
-      const state = result.trackingState;           // „tracked“, „emulated“, „not-tracked“
-      if (state === 'tracked') {
-        const pose = frame.getPose(result.imageSpace, xrRefSpace);
-        if (pose) {
-          // Овде можеме да го рендерираме 3D моделот во поза `pose.transform`:
-          //   pose.transform.position  (x, y, z)
-          //   pose.transform.orientation (кватернион)
-          // За краткост, тука не правиме вистинско Three.js рендерирање,
-          // туку само ја покажуваме состојбата во конзола:
-          console.log('Слика детектирана: index =', imageIndex,
-                  ', поза =', pose.transform);
-          // Овa е моментот да го додадеш твојот Three.js/GLTF рендерер,
-          // каде што ќе креираш сцена, камера и светло, и ќе го позиционираш
-          // моделот (на пр. House.glb или Farmhouse.glb) на основа на оваа поза.
-        }
-      }
+  // ✅ Ensure AR is triggered on click
+  document.getElementById('ar-button').onclick = () => {
+    if (viewer && typeof viewer.activateAR === 'function') {
+      viewer.activateAR();
+    } else {
+      alert("AR not supported or model not loaded.");
     }
-  }
-
-  // Почнуваме ги проверките
-  checkXRSupport();
+  };
 </script>
 </body>
 </html>
