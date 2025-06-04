@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>30x30 Tile in AR</title>
+  <title>3D model in AR</title>
   <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
     body { text-align: center; font-family: sans-serif; margin-top: 50px; }
@@ -42,10 +42,10 @@
 
   // ✅ Dynamically load correct model for platform
   if (isIOS) {
-    viewer.setAttribute("ios-src", "house.usdz");
-    viewer.setAttribute("src", "house.glb"); // fallback
+    viewer.setAttribute("ios-src", "House.usdz");
+    viewer.setAttribute("src", "House.glb"); // fallback
   } else if (isAndroid) {
-    viewer.setAttribute("src", "house.glb");
+    viewer.setAttribute("src", "House.glb");
   }
 
   // ✅ Ensure AR is triggered on click
